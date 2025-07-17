@@ -76,7 +76,12 @@ def clean_signature(image_np):
     return cleaned
 
 def crop_signature(image_np):
+    height, width = image_np.shape
     x, y, w, h = 100, 430, 820, 220
+    x = min(x, width - 1)
+    y = min(y, height - 1)
+    w = min(w, width - x)
+    h = min(h, height - y)
     cropped_image = image_np[y:y+h, x:x+w]
     return cropped_image
 
@@ -113,7 +118,7 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
     hu_score = compare_hu_moments(cleaned_img1, cleaned_img2)
     ssim_score = compare_ssim_score(cleaned_img1, cleaned_img2)
 
-    combined_score = (orb_score * 0.8) + (hu_score * 0.1) + (ssim_score * 0.1)
+    combined_score = (orb_score * 0.5) + (hu_score * 0.3) + (ssim_score * 0.2)
 
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
@@ -166,7 +171,7 @@ async def compare_signatures_no_crop(customer_signature: UploadFile = File(...),
     hu_score = compare_hu_moments(cleaned_img1, cleaned_img2)
     ssim_score = compare_ssim_score(cleaned_img1, cleaned_img2)
 
-    combined_score = (orb_score * 0.8) + (hu_score * 0.1) + (ssim_score * 0.1)
+    combined_score = (orb_score * 0.5) + (hu_score * 0.3) + (ssim_score * 0.2)
 
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
