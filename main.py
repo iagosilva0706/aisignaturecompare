@@ -76,25 +76,11 @@ def clean_signature(image_np):
     return cleaned
 
 def crop_signature(image_np):
-    gray = cv2.GaussianBlur(image_np, (5, 5), 0)
-    _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
-
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    if not contours:
-        return image_np
-
-    all_contours = np.vstack(contours)
-    x, y, w, h = cv2.boundingRect(all_contours)
-
-    margin = 20
-    x = max(0, x - margin)
-    y = max(0, y - margin)
-    w = min(image_np.shape[1] - x, w + 2 * margin)
-    h = min(image_np.shape[0] - y, h + 2 * margin)
-
-    cropped_image = image_np[y:y + h, x:x + w]
+    # Example: adjust based on your template
+    x, y, w, h = 500, 1800, 2500, 600
+    cropped_image = image_np[y:y+h, x:x+w]
     return cropped_image
+
 
 @app.post("/debug-cleaned-image")
 async def debug_cleaned_image(file: UploadFile = File(...)):
