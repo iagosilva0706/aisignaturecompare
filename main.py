@@ -68,30 +68,6 @@ def compare_ssim_score(image1, image2):
     score, _ = compare_ssim(image1_resized, image2_resized, full=True)
     return score
 
-def crop_signature(image_np):
-    height = image_np.shape[0]
-    focus_region_start = int(height * 0.75)
-    focus_region = image_np[focus_region_start:, :]
-
-    _, thresh = cv2.threshold(focus_region, 200, 255, cv2.THRESH_BINARY_INV)
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    if not contours:
-        return image_np
-
-    largest_contour = max(contours, key=cv2.contourArea)
-    x, y, w, h = cv2.boundingRect(largest_contour)
-    y += focus_region_start
-
-    margin = 100
-    x = max(0, x - margin)
-    y = max(0, y - margin)
-    w = min(image_np.shape[1] - x, w + 2 * margin)
-    h = min(image_np.shape[0] - y, h + 2 * margin)
-
-    cropped_image = image_np[y:y + h, x:x + w]
-    return cropped_image
-
 def clean_signature(image_np):
     gray = cv2.GaussianBlur(image_np, (5, 5), 0)
     adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -103,37 +79,35 @@ def clean_signature(image_np):
 async def debug_cleaned_image(file: UploadFile = File(...)):
     contents = await file.read()
     image_np = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_GRAYSCALE)
-    cropped = crop_signature(image_np)
-    cleaned = clean_signature(cropped)
+    cleaned = clean_signature(image_np)
     pil_image = Image.fromarray(cleaned)
     buf = BytesIO()
     pil_image.save(buf, format='PNG')
     buf.seek(0)
     return StreamingResponse(buf, media_type="image/png")
 
-@app.post("/compare-signatures")
-async def compare_signatures(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
+@app.post("/compare-signatures-no-crop")
+async def compare_signatures_no_crop(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
     contents1 = await customer_signature.read()
     contents2 = await database_signature.read()
 
     img1 = cv2.imdecode(np.frombuffer(contents1, np.uint8), cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imdecode(np.frombuffer(contents2, np.uint8), cv2.IMREAD_GRAYSCALE)
 
-    cropped_img1 = crop_signature(img1)
-    cleaned_cropped_img1 = clean_signature(cropped_img1)
+    cleaned_img1 = clean_signature(img1)
     cleaned_img2 = clean_signature(img2)
 
-    processed1 = preprocess_image(cleaned_cropped_img1)
+    processed1 = preprocess_image(cleaned_img1)
     processed2 = preprocess_image(cleaned_img2)
 
     features1 = extract_modern_descriptors(processed1)
     features2 = extract_modern_descriptors(processed2)
 
     orb_score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
-    hu_score = compare_hu_moments(cleaned_cropped_img1, cleaned_img2)
-    ssim_score = compare_ssim_score(cleaned_cropped_img1, cleaned_img2)
+    hu_score = compare_hu_moments(cleaned_img1, cleaned_img2)
+    ssim_score = compare_ssim_score(cleaned_img1, cleaned_img2)
 
-    combined_score = (orb_score * 0.5) + (hu_score * 0.1) + (ssim_score * 0.4)
+    combined_score = (orb_score * 0.5) + (hu_score * 0.3) + (ssim_score * 0.2)
 
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
