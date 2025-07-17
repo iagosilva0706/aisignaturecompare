@@ -25,7 +25,7 @@ def clean_signature(image_np):
 
 def crop_signature_fixed(image_np):
     # Coordinates from your marked box (x, y, w, h)
-    x, y, w, h = 1097, 729, 1401, 1295
+    x, y, w, h = 1122,718,1110,567
     cropped_image = image_np[y:y + h, x:x + w]
     return cropped_image
 
