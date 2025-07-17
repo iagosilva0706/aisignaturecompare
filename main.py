@@ -57,13 +57,23 @@ def compare_hu_moments(image1, image2):
     moments2 = cv2.moments(image2)
     hu2 = cv2.HuMoments(moments2).flatten()
     log_diff = np.sum(np.abs(-np.sign(hu1) * np.log10(np.abs(hu1 + 1e-10)) - (-np.sign(hu2) * np.log10(np.abs(hu2 + 1e-10)))))
-    return max(0.0, 1.0 - log_diff / 30)  # Normalize difference to [0,1]
+    return max(0.0, 1.0 - log_diff / 30)
 
 def compare_ssim_score(image1, image2):
     image1_resized = cv2.resize(image1, (300, 100))
     image2_resized = cv2.resize(image2, (300, 100))
     score, _ = compare_ssim(image1_resized, image2_resized, full=True)
     return score
+
+def compare_shape_match(image1, image2):
+    contours1, _ = cv2.findContours(image1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours2, _ = cv2.findContours(image2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours1 or not contours2:
+        return 0.0
+    cnt1 = max(contours1, key=cv2.contourArea)
+    cnt2 = max(contours2, key=cv2.contourArea)
+    similarity = 1.0 - cv2.matchShapes(cnt1, cnt2, cv2.CONTOURS_MATCH_I1, 0.0)
+    return max(0.0, min(similarity, 1.0))
 
 def crop_signature(image_np):
     height = image_np.shape[0]
@@ -120,12 +130,13 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
     orb_score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
     hu_score = compare_hu_moments(processed1, processed2)
     ssim_score = compare_ssim_score(processed1, processed2)
+    shape_score = compare_shape_match(processed1, processed2)
 
-    combined_score = (orb_score * 0.4) + (hu_score * 0.3) + (ssim_score * 0.3)
+    combined_score = (orb_score * 0.2) + (hu_score * 0.3) + (ssim_score * 0.1) + (shape_score * 0.4)
 
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
-                       f"ORB score: {orb_score}; Hu Moments score: {hu_score}; SSIM score: {ssim_score}. " \
+                       f"ORB score: {orb_score}; Hu Moments score: {hu_score}; SSIM score: {ssim_score}; Shape score: {shape_score}. " \
                        f"Combined similarity score: {combined_score}."
 
     if combined_score >= 0.75:
