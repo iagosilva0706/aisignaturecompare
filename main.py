@@ -60,14 +60,18 @@ def compare_hu_moments(image1, image2):
     return max(0.0, 1.0 - log_diff / 30)
 
 def compare_ssim_score(image1, image2):
-    image1_resized = cv2.resize(image1, (300, 100))
-    image2_resized = cv2.resize(image2, (300, 100))
+    image1_blur = cv2.GaussianBlur(image1, (5, 5), 0)
+    image2_blur = cv2.GaussianBlur(image2, (5, 5), 0)
+    image1_resized = cv2.resize(image1_blur, (300, 100))
+    image2_resized = cv2.resize(image2_blur, (300, 100))
     score, _ = compare_ssim(image1_resized, image2_resized, full=True)
     return score
 
 def compare_shape_match(image1, image2):
-    contours1, _ = cv2.findContours(image1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours2, _ = cv2.findContours(image2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    _, thresh1 = cv2.threshold(image1, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    _, thresh2 = cv2.threshold(image2, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    contours1, _ = cv2.findContours(thresh1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours2, _ = cv2.findContours(thresh2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours1 or not contours2:
         return 0.0
     cnt1 = max(contours1, key=cv2.contourArea)
@@ -104,11 +108,7 @@ def clean_signature(image_np):
     _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     kernel = np.ones((2, 2), np.uint8)
     cleaned = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
-    skeleton = skeletonize(cleaned > 0).astype(np.uint8) * 255
-    skeleton_pil = Image.fromarray(skeleton)
-    autocontrasted = ImageOps.autocontrast(skeleton_pil, cutoff=2)
-    resized = autocontrasted.resize((autocontrasted.width * 2, autocontrasted.height * 2), Image.Resampling.BICUBIC)
-    return np.array(resized.convert("L"))
+    return cleaned
 
 @app.post("/compare-signatures")
 async def compare_signatures(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
@@ -120,17 +120,18 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
 
     cropped_img1 = crop_signature(img1)
     cleaned_cropped_img1 = clean_signature(cropped_img1)
+    cleaned_img2 = clean_signature(img2)
 
     processed1 = preprocess_image(cleaned_cropped_img1)
-    processed2 = preprocess_image(img2)
+    processed2 = preprocess_image(cleaned_img2)
 
     features1 = extract_modern_descriptors(processed1)
     features2 = extract_modern_descriptors(processed2)
 
     orb_score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
-    hu_score = compare_hu_moments(processed1, processed2)
-    ssim_score = compare_ssim_score(processed1, processed2)
-    shape_score = compare_shape_match(processed1, processed2)
+    hu_score = compare_hu_moments(cleaned_cropped_img1, cleaned_img2)
+    ssim_score = compare_ssim_score(cleaned_cropped_img1, cleaned_img2)
+    shape_score = compare_shape_match(cleaned_cropped_img1, cleaned_img2)
 
     combined_score = (orb_score * 0.2) + (hu_score * 0.3) + (ssim_score * 0.1) + (shape_score * 0.4)
 
