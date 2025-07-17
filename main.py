@@ -106,10 +106,10 @@ def crop_signature(image_np):
     return cropped_image
 
 def clean_signature(image_np):
-    blurred = cv2.GaussianBlur(image_np, (5, 5), 0)
-    _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    kernel = np.ones((2, 2), np.uint8)
-    cleaned = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+    gray = cv2.GaussianBlur(image_np, (5, 5), 0)
+    adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                     cv2.THRESH_BINARY, 35, 10)
+    cleaned = cv2.bitwise_not(adaptive)
     return cleaned
 
 @app.post("/compare-signatures")
