@@ -104,15 +104,28 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
 
     score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
 
-    if score >= 0.6:
+    analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
+                       f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
+                       f"Similarity score based on matched descriptors: {score}."
+
+    if score >= 0.75:
         result = "definite match"
-        description = "The signatures are strongly matched and likely from the same individual."
+        description = "The signatures are strongly matched and highly likely from the same individual. " + analysis_summary
+    elif score >= 0.6:
+        result = "very strong match"
+        description = "The signatures are very similar with high confidence. " + analysis_summary
+    elif score >= 0.45:
+        result = "strong match"
+        description = "The signatures are matched but not conclusively. " + analysis_summary
     elif score >= 0.3:
         result = "possible match"
-        description = "The signatures show partial similarity; further manual review is recommended."
+        description = "The signatures show partial similarity; further manual review is recommended. " + analysis_summary
+    elif score >= 0.15:
+        result = "unlikely match"
+        description = "The signatures show weak similarity and likely do not belong to the same person. " + analysis_summary
     else:
         result = "no match"
-        description = "The signatures do not match and are likely from different individuals."
+        description = "The signatures do not match and are almost certainly from different individuals. " + analysis_summary
 
     return {
         "score": score,
