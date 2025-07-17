@@ -76,21 +76,18 @@ def clean_signature(image_np):
     return cleaned
 
 def crop_signature(image_np):
-    height = image_np.shape[0]
-    focus_region_start = int(height * 0.75)
-    focus_region = image_np[focus_region_start:, :]
+    gray = cv2.GaussianBlur(image_np, (5, 5), 0)
+    _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY_INV)
 
-    _, thresh = cv2.threshold(focus_region, 200, 255, cv2.THRESH_BINARY_INV)
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     if not contours:
         return image_np
 
-    largest_contour = max(contours, key=cv2.contourArea)
-    x, y, w, h = cv2.boundingRect(largest_contour)
-    y += focus_region_start
+    all_contours = np.vstack(contours)
+    x, y, w, h = cv2.boundingRect(all_contours)
 
-    margin = 100
+    margin = 20
     x = max(0, x - margin)
     y = max(0, y - margin)
     w = min(image_np.shape[1] - x, w + 2 * margin)
