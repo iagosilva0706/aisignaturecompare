@@ -76,21 +76,16 @@ def clean_signature(image_np):
     return cleaned
 
 def crop_signature_fixed(image_np):
-    # Refined cropping coordinates based on your new guidance:
-    x_start = 1097    # Tightened left side
-    y_start = 729   # Raised top side
-    x_end = 304     # Keep right side as-is
-    y_end = 566     # Lifted bottom side slightly
-
-    # Clamp coordinates within image bounds
-    x_start = max(0, x_start)
-    y_start = max(0, y_start)
-    x_end = min(image_np.shape[1], x_end)
-    y_end = min(image_np.shape[0], y_end)
+    """
+    Crop customer signature using fixed bounding box coordinates.
+    """
+    x_start = 1097
+    y_start = 729
+    x_end = 1401  # x_start + 304
+    y_end = 1295  # y_start + 566
 
     cropped_image = image_np[y_start:y_end, x_start:x_end]
     return cropped_image
-
 
 @app.post("/debug-cleaned-image")
 async def debug_cleaned_image(file: UploadFile = File(...)):
@@ -114,9 +109,9 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
     img1 = cv2.imdecode(np.frombuffer(contents1, np.uint8), cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imdecode(np.frombuffer(contents2, np.uint8), cv2.IMREAD_GRAYSCALE)
 
-    cropped_img1 = crop_signature(img1)
-    cleaned_img1 = clean_signature(cropped_img1)
-    cleaned_img2 = clean_signature(img2)
+    cropped_img1 = crop_signature_fixed(img1)
+	cleaned_img1 = clean_signature(cropped_img1)
+	cleaned_img2 = clean_signature(img2)  # No crop for database_signature
 
     processed1 = preprocess_image(cleaned_img1)
     processed2 = preprocess_image(cleaned_img2)
