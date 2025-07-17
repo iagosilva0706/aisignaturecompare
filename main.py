@@ -76,11 +76,9 @@ def clean_signature(image_np):
     return cleaned
 
 def crop_signature(image_np):
-    # Example: adjust based on your template
-    x, y, w, h = 500, 1800, 2500, 600
+    x, y, w, h = 100, 430, 820, 220
     cropped_image = image_np[y:y+h, x:x+w]
     return cropped_image
-
 
 @app.post("/debug-cleaned-image")
 async def debug_cleaned_image(file: UploadFile = File(...)):
