@@ -47,9 +47,9 @@ def compare_orb(descriptors1, descriptors2):
     return round(similarity, 4)
 
 @app.post("/compare-signatures")
-async def compare_signatures(file1: UploadFile = File(...), file2: UploadFile = File(...)):
-    contents1 = await file1.read()
-    contents2 = await file2.read()
+async def compare_signatures(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
+    contents1 = await customer_signature.read()
+    contents2 = await database_signature.read()
 
     img1 = cv2.imdecode(np.frombuffer(contents1, np.uint8), cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imdecode(np.frombuffer(contents2, np.uint8), cv2.IMREAD_GRAYSCALE)
@@ -62,4 +62,18 @@ async def compare_signatures(file1: UploadFile = File(...), file2: UploadFile = 
 
     score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
 
-    return {"similarity_score": score}
+    if score >= 0.6:
+        result = "definite match"
+        description = "The signatures are strongly matched and likely from the same individual."
+    elif score >= 0.3:
+        result = "possible match"
+        description = "The signatures show partial similarity; further manual review is recommended."
+    else:
+        result = "no match"
+        description = "The signatures do not match and are likely from different individuals."
+
+    return {
+        "score": score,
+        "result": result,
+        "description": description
+    }
