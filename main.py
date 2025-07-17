@@ -107,7 +107,7 @@ async def compare_signatures_no_crop(customer_signature: UploadFile = File(...),
     hu_score = compare_hu_moments(cleaned_img1, cleaned_img2)
     ssim_score = compare_ssim_score(cleaned_img1, cleaned_img2)
 
-    combined_score = (orb_score * 0.5) + (hu_score * 0.3) + (ssim_score * 0.2)
+    combined_score = (orb_score * 0.7) + (hu_score * 0.15) + (ssim_score * 0.15)
 
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
