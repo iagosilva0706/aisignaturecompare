@@ -38,3 +38,28 @@ async def analyze_signature(file: UploadFile = File(...)):
 
     return JSONResponse(content=features)
 
+def compare_orb(descriptors1, descriptors2):
+    if descriptors1 is None or descriptors2 is None:
+        return 0.0
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    matches = bf.match(np.array(descriptors1, dtype=np.uint8), np.array(descriptors2, dtype=np.uint8))
+    similarity = len(matches) / max(len(descriptors1), len(descriptors2))
+    return round(similarity, 4)
+
+@app.post("/compare-signatures")
+async def compare_signatures(file1: UploadFile = File(...), file2: UploadFile = File(...)):
+    contents1 = await file1.read()
+    contents2 = await file2.read()
+
+    img1 = cv2.imdecode(np.frombuffer(contents1, np.uint8), cv2.IMREAD_GRAYSCALE)
+    img2 = cv2.imdecode(np.frombuffer(contents2, np.uint8), cv2.IMREAD_GRAYSCALE)
+
+    processed1 = preprocess_image(img1)
+    processed2 = preprocess_image(img2)
+
+    features1 = extract_modern_descriptors(processed1)
+    features2 = extract_modern_descriptors(processed2)
+
+    score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
+
+    return {"similarity_score": score}
