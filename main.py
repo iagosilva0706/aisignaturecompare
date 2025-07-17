@@ -5,6 +5,7 @@ import cv2
 from PIL import Image, ImageOps
 import uuid
 import os
+from skimage.morphology import skeletonize
 from processing import preprocess_image, skeletonize_image
 from features import (
     extract_structural_features,
@@ -73,6 +74,17 @@ def crop_signature(image_np):
     cropped_image = image_np[y:y + h, x:x + w]
     return cropped_image
 
+def clean_signature(image_np):
+    blurred = cv2.GaussianBlur(image_np, (5, 5), 0)
+    _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    kernel = np.ones((2, 2), np.uint8)
+    cleaned = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+    skeleton = skeletonize(cleaned > 0).astype(np.uint8) * 255
+    skeleton_pil = Image.fromarray(skeleton)
+    autocontrasted = ImageOps.autocontrast(skeleton_pil, cutoff=2)
+    resized = autocontrasted.resize((autocontrasted.width * 2, autocontrasted.height * 2), Image.Resampling.BICUBIC)
+    return np.array(resized.convert("L"))
+
 @app.post("/compare-signatures")
 async def compare_signatures(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
     contents1 = await customer_signature.read()
@@ -82,8 +94,9 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
     img2 = cv2.imdecode(np.frombuffer(contents2, np.uint8), cv2.IMREAD_GRAYSCALE)
 
     cropped_img1 = crop_signature(img1)
+    cleaned_cropped_img1 = clean_signature(cropped_img1)
 
-    processed1 = preprocess_image(cropped_img1)
+    processed1 = preprocess_image(cleaned_cropped_img1)
     processed2 = preprocess_image(img2)
 
     features1 = extract_modern_descriptors(processed1)
