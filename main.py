@@ -76,13 +76,13 @@ def clean_signature(image_np):
     return cleaned
 
 def crop_signature_fixed(image_np):
-    # Hardcoded cropping coordinates based on your yellow box example
-    x_start = 400
-    y_start = 1300
-    x_end = 2450
-    y_end = 1850
+    # Refined cropping coordinates based on your new guidance:
+    x_start = 550    # Tightened left side
+    y_start = 1350   # Raised top side
+    x_end = 2450     # Keep right side as-is
+    y_end = 1800     # Lifted bottom side slightly
 
-    # Ensure coordinates stay within image bounds
+    # Clamp coordinates within image bounds
     x_start = max(0, x_start)
     y_start = max(0, y_start)
     x_end = min(image_np.shape[1], x_end)
@@ -90,6 +90,7 @@ def crop_signature_fixed(image_np):
 
     cropped_image = image_np[y_start:y_end, x_start:x_end]
     return cropped_image
+
 
 @app.post("/debug-cleaned-image")
 async def debug_cleaned_image(file: UploadFile = File(...)):
