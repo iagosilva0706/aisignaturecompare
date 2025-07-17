@@ -1,10 +1,11 @@
 from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 import numpy as np
 import cv2
 from PIL import Image, ImageOps
 import uuid
 import os
+from io import BytesIO
 from skimage.morphology import skeletonize
 from skimage.metrics import structural_similarity as compare_ssim
 from processing import preprocess_image, skeletonize_image
@@ -111,6 +112,18 @@ def clean_signature(image_np):
                                      cv2.THRESH_BINARY, 35, 10)
     cleaned = cv2.bitwise_not(adaptive)
     return cleaned
+
+@app.post("/debug-cleaned-image")
+async def debug_cleaned_image(file: UploadFile = File(...)):
+    contents = await file.read()
+    image_np = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_GRAYSCALE)
+    cropped = crop_signature(image_np)
+    cleaned = clean_signature(cropped)
+    pil_image = Image.fromarray(cleaned)
+    buf = BytesIO()
+    pil_image.save(buf, format='PNG')
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/png")
 
 @app.post("/compare-signatures")
 async def compare_signatures(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
