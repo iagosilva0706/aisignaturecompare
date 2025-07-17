@@ -67,11 +67,11 @@ def compare_ssim_score(image1, image2):
     score, _ = compare_ssim(image1_resized, image2_resized, full=True)
     return score
 
-def compare_shape_match(image1, image2):
-    _, thresh1 = cv2.threshold(image1, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    _, thresh2 = cv2.threshold(image2, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    contours1, _ = cv2.findContours(thresh1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours2, _ = cv2.findContours(thresh2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+def compare_canny_shape_match(image1, image2):
+    edges1 = cv2.Canny(image1, 50, 150)
+    edges2 = cv2.Canny(image2, 50, 150)
+    contours1, _ = cv2.findContours(edges1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours2, _ = cv2.findContours(edges2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours1 or not contours2:
         return 0.0
     cnt1 = max(contours1, key=cv2.contourArea)
@@ -133,9 +133,9 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
     orb_score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
     hu_score = compare_hu_moments(cleaned_cropped_img1, cleaned_img2)
     ssim_score = compare_ssim_score(cleaned_cropped_img1, cleaned_img2)
-    shape_score = compare_shape_match(cleaned_cropped_img1, cleaned_img2)
+    shape_score = compare_canny_shape_match(cleaned_cropped_img1, cleaned_img2)
 
-    combined_score = (orb_score * 0.35) + (shape_score * 0.35) + (hu_score * 0.15) + (ssim_score * 0.05)
+    combined_score = (orb_score * 0.3) + (shape_score * 0.4) + (hu_score * 0.2) + (ssim_score * 0.1)
 
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
