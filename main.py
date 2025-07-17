@@ -6,6 +6,7 @@ from PIL import Image, ImageOps
 import uuid
 import os
 from skimage.morphology import skeletonize
+from skimage.metrics import structural_similarity as compare_ssim
 from processing import preprocess_image, skeletonize_image
 from features import (
     extract_structural_features,
@@ -49,6 +50,20 @@ def compare_orb(descriptors1, descriptors2):
     matches = bf.match(np.array(descriptors1, dtype=np.uint8), np.array(descriptors2, dtype=np.uint8))
     similarity = len(matches) / max(len(descriptors1), len(descriptors2))
     return round(similarity, 4)
+
+def compare_hu_moments(image1, image2):
+    moments1 = cv2.moments(image1)
+    hu1 = cv2.HuMoments(moments1).flatten()
+    moments2 = cv2.moments(image2)
+    hu2 = cv2.HuMoments(moments2).flatten()
+    log_diff = np.sum(np.abs(-np.sign(hu1) * np.log10(np.abs(hu1 + 1e-10)) - (-np.sign(hu2) * np.log10(np.abs(hu2 + 1e-10)))))
+    return max(0.0, 1.0 - log_diff / 30)  # Normalize difference to [0,1]
+
+def compare_ssim_score(image1, image2):
+    image1_resized = cv2.resize(image1, (300, 100))
+    image2_resized = cv2.resize(image2, (300, 100))
+    score, _ = compare_ssim(image1_resized, image2_resized, full=True)
+    return score
 
 def crop_signature(image_np):
     height = image_np.shape[0]
@@ -102,25 +117,30 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
     features1 = extract_modern_descriptors(processed1)
     features2 = extract_modern_descriptors(processed2)
 
-    score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
+    orb_score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
+    hu_score = compare_hu_moments(processed1, processed2)
+    ssim_score = compare_ssim_score(processed1, processed2)
+
+    combined_score = (orb_score * 0.4) + (hu_score * 0.3) + (ssim_score * 0.3)
 
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
-                       f"Similarity score based on matched descriptors: {score}."
+                       f"ORB score: {orb_score}; Hu Moments score: {hu_score}; SSIM score: {ssim_score}. " \
+                       f"Combined similarity score: {combined_score}."
 
-    if score >= 0.75:
+    if combined_score >= 0.75:
         result = "definite match"
         description = "The signatures are strongly matched and highly likely from the same individual. " + analysis_summary
-    elif score >= 0.6:
+    elif combined_score >= 0.6:
         result = "very strong match"
         description = "The signatures are very similar with high confidence. " + analysis_summary
-    elif score >= 0.45:
+    elif combined_score >= 0.45:
         result = "strong match"
         description = "The signatures are matched but not conclusively. " + analysis_summary
-    elif score >= 0.3:
+    elif combined_score >= 0.3:
         result = "possible match"
         description = "The signatures show partial similarity; further manual review is recommended. " + analysis_summary
-    elif score >= 0.15:
+    elif combined_score >= 0.15:
         result = "unlikely match"
         description = "The signatures show weak similarity and likely do not belong to the same person. " + analysis_summary
     else:
@@ -128,7 +148,7 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
         description = "The signatures do not match and are almost certainly from different individuals. " + analysis_summary
 
     return {
-        "score": score,
+        "score": round(combined_score, 4),
         "result": result,
         "description": description
     }
