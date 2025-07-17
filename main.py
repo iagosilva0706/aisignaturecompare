@@ -76,6 +76,8 @@ def compare_shape_match(image1, image2):
         return 0.0
     cnt1 = max(contours1, key=cv2.contourArea)
     cnt2 = max(contours2, key=cv2.contourArea)
+    if cv2.contourArea(cnt1) < 50 or cv2.contourArea(cnt2) < 50:
+        return 0.0
     similarity = 1.0 - cv2.matchShapes(cnt1, cnt2, cv2.CONTOURS_MATCH_I1, 0.0)
     return max(0.0, min(similarity, 1.0))
 
@@ -133,7 +135,7 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
     ssim_score = compare_ssim_score(cleaned_cropped_img1, cleaned_img2)
     shape_score = compare_shape_match(cleaned_cropped_img1, cleaned_img2)
 
-    combined_score = (orb_score * 0.2) + (hu_score * 0.3) + (ssim_score * 0.1) + (shape_score * 0.4)
+    combined_score = (orb_score * 0.35) + (shape_score * 0.35) + (hu_score * 0.15) + (ssim_score * 0.05)
 
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
