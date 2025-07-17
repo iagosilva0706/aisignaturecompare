@@ -2,6 +2,9 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
 import numpy as np
 import cv2
+from PIL import Image, ImageOps
+import uuid
+import os
 from processing import preprocess_image, skeletonize_image
 from features import (
     extract_structural_features,
@@ -46,6 +49,30 @@ def compare_orb(descriptors1, descriptors2):
     similarity = len(matches) / max(len(descriptors1), len(descriptors2))
     return round(similarity, 4)
 
+def crop_signature(image_np):
+    height = image_np.shape[0]
+    focus_region_start = int(height * 0.75)
+    focus_region = image_np[focus_region_start:, :]
+
+    _, thresh = cv2.threshold(focus_region, 200, 255, cv2.THRESH_BINARY_INV)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if not contours:
+        return image_np
+
+    largest_contour = max(contours, key=cv2.contourArea)
+    x, y, w, h = cv2.boundingRect(largest_contour)
+    y += focus_region_start
+
+    margin = 100
+    x = max(0, x - margin)
+    y = max(0, y - margin)
+    w = min(image_np.shape[1] - x, w + 2 * margin)
+    h = min(image_np.shape[0] - y, h + 2 * margin)
+
+    cropped_image = image_np[y:y + h, x:x + w]
+    return cropped_image
+
 @app.post("/compare-signatures")
 async def compare_signatures(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
     contents1 = await customer_signature.read()
@@ -54,7 +81,9 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
     img1 = cv2.imdecode(np.frombuffer(contents1, np.uint8), cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imdecode(np.frombuffer(contents2, np.uint8), cv2.IMREAD_GRAYSCALE)
 
-    processed1 = preprocess_image(img1)
+    cropped_img1 = crop_signature(img1)
+
+    processed1 = preprocess_image(cropped_img1)
     processed2 = preprocess_image(img2)
 
     features1 = extract_modern_descriptors(processed1)
