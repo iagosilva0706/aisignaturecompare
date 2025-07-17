@@ -76,14 +76,18 @@ def clean_signature(image_np):
     return cleaned
 
 def crop_signature_fixed(image_np):
-    height, width = image_np.shape[:2]
-    
-    # These values are approximate and should be adjusted if needed.
-    x_start = int(width * 0.18)
-    x_end = int(width * 0.96)
-    y_start = int(height * 0.75)
-    y_end = int(height * 0.95)
-    
+    # Hardcoded cropping coordinates based on your yellow box example
+    x_start = 400
+    y_start = 1300
+    x_end = 2450
+    y_end = 1850
+
+    # Ensure coordinates stay within image bounds
+    x_start = max(0, x_start)
+    y_start = max(0, y_start)
+    x_end = min(image_np.shape[1], x_end)
+    y_end = min(image_np.shape[0], y_end)
+
     cropped_image = image_np[y_start:y_end, x_start:x_end]
     return cropped_image
 
