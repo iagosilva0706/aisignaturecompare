@@ -75,6 +75,30 @@ def clean_signature(image_np):
     cleaned = cv2.bitwise_not(adaptive)
     return cleaned
 
+def crop_signature(image_np):
+    height = image_np.shape[0]
+    focus_region_start = int(height * 0.75)
+    focus_region = image_np[focus_region_start:, :]
+
+    _, thresh = cv2.threshold(focus_region, 200, 255, cv2.THRESH_BINARY_INV)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if not contours:
+        return image_np
+
+    largest_contour = max(contours, key=cv2.contourArea)
+    x, y, w, h = cv2.boundingRect(largest_contour)
+    y += focus_region_start
+
+    margin = 100
+    x = max(0, x - margin)
+    y = max(0, y - margin)
+    w = min(image_np.shape[1] - x, w + 2 * margin)
+    h = min(image_np.shape[0] - y, h + 2 * margin)
+
+    cropped_image = image_np[y:y + h, x:x + w]
+    return cropped_image
+
 @app.post("/debug-cleaned-image")
 async def debug_cleaned_image(file: UploadFile = File(...)):
     contents = await file.read()
@@ -85,6 +109,60 @@ async def debug_cleaned_image(file: UploadFile = File(...)):
     pil_image.save(buf, format='PNG')
     buf.seek(0)
     return StreamingResponse(buf, media_type="image/png")
+
+@app.post("/compare-signatures")
+async def compare_signatures(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
+    contents1 = await customer_signature.read()
+    contents2 = await database_signature.read()
+
+    img1 = cv2.imdecode(np.frombuffer(contents1, np.uint8), cv2.IMREAD_GRAYSCALE)
+    img2 = cv2.imdecode(np.frombuffer(contents2, np.uint8), cv2.IMREAD_GRAYSCALE)
+
+    cropped_img1 = crop_signature(img1)
+    cleaned_img1 = clean_signature(cropped_img1)
+    cleaned_img2 = clean_signature(img2)
+
+    processed1 = preprocess_image(cleaned_img1)
+    processed2 = preprocess_image(cleaned_img2)
+
+    features1 = extract_modern_descriptors(processed1)
+    features2 = extract_modern_descriptors(processed2)
+
+    orb_score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
+    hu_score = compare_hu_moments(cleaned_img1, cleaned_img2)
+    ssim_score = compare_ssim_score(cleaned_img1, cleaned_img2)
+
+    combined_score = (orb_score * 0.5) + (hu_score * 0.3) + (ssim_score * 0.2)
+
+    analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
+                       f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
+                       f"ORB score: {orb_score}; Hu Moments score: {hu_score}; SSIM score: {ssim_score}. " \
+                       f"Combined similarity score: {combined_score}."
+
+    if combined_score >= 0.75:
+        result = "definite match"
+        description = "The signatures are strongly matched and highly likely from the same individual. " + analysis_summary
+    elif combined_score >= 0.6:
+        result = "very strong match"
+        description = "The signatures are very similar with high confidence. " + analysis_summary
+    elif combined_score >= 0.45:
+        result = "strong match"
+        description = "The signatures are matched but not conclusively. " + analysis_summary
+    elif combined_score >= 0.3:
+        result = "possible match"
+        description = "The signatures show partial similarity; further manual review is recommended. " + analysis_summary
+    elif combined_score >= 0.15:
+        result = "unlikely match"
+        description = "The signatures show weak similarity and likely do not belong to the same person. " + analysis_summary
+    else:
+        result = "no match"
+        description = "The signatures do not match and are almost certainly from different individuals. " + analysis_summary
+
+    return {
+        "score": round(combined_score, 4),
+        "result": result,
+        "description": description
+    }
 
 @app.post("/compare-signatures-no-crop")
 async def compare_signatures_no_crop(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
@@ -107,7 +185,7 @@ async def compare_signatures_no_crop(customer_signature: UploadFile = File(...),
     hu_score = compare_hu_moments(cleaned_img1, cleaned_img2)
     ssim_score = compare_ssim_score(cleaned_img1, cleaned_img2)
 
-    combined_score = (orb_score * 0.7) + (hu_score * 0.15) + (ssim_score * 0.15)
+    combined_score = (orb_score * 0.8) + (hu_score * 0.1) + (ssim_score * 0.1)
 
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
