@@ -68,20 +68,6 @@ def compare_ssim_score(image1, image2):
     score, _ = compare_ssim(image1_resized, image2_resized, full=True)
     return score
 
-def compare_canny_shape_match(image1, image2):
-    edges1 = cv2.Canny(image1, 50, 150)
-    edges2 = cv2.Canny(image2, 50, 150)
-    contours1, _ = cv2.findContours(edges1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours2, _ = cv2.findContours(edges2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours1 or not contours2:
-        return 0.0
-    cnt1 = max(contours1, key=cv2.contourArea)
-    cnt2 = max(contours2, key=cv2.contourArea)
-    if cv2.contourArea(cnt1) < 50 or cv2.contourArea(cnt2) < 50:
-        return 0.0
-    similarity = 1.0 - cv2.matchShapes(cnt1, cnt2, cv2.CONTOURS_MATCH_I1, 0.0)
-    return max(0.0, min(similarity, 1.0))
-
 def crop_signature(image_np):
     height = image_np.shape[0]
     focus_region_start = int(height * 0.75)
@@ -146,13 +132,12 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
     orb_score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
     hu_score = compare_hu_moments(cleaned_cropped_img1, cleaned_img2)
     ssim_score = compare_ssim_score(cleaned_cropped_img1, cleaned_img2)
-    shape_score = compare_canny_shape_match(cleaned_cropped_img1, cleaned_img2)
 
-    combined_score = (orb_score * 0.3) + (shape_score * 0.4) + (hu_score * 0.2) + (ssim_score * 0.1)
+    combined_score = (orb_score * 0.5) + (hu_score * 0.3) + (ssim_score * 0.2)
 
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
-                       f"ORB score: {orb_score}; Hu Moments score: {hu_score}; SSIM score: {ssim_score}; Shape score: {shape_score}. " \
+                       f"ORB score: {orb_score}; Hu Moments score: {hu_score}; SSIM score: {ssim_score}. " \
                        f"Combined similarity score: {combined_score}."
 
     if combined_score >= 0.75:
