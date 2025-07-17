@@ -2,47 +2,13 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 import numpy as np
 import cv2
-from PIL import Image, ImageOps
-import uuid
-import os
+from PIL import Image
 from io import BytesIO
-from skimage.morphology import skeletonize
 from skimage.metrics import structural_similarity as compare_ssim
-from processing import preprocess_image, skeletonize_image
-from features import (
-    extract_structural_features,
-    extract_statistical_features,
-    extract_texture_features,
-    extract_dynamic_features,
-    extract_modern_descriptors
-)
+from processing import preprocess_image
+from features import extract_modern_descriptors
 
 app = FastAPI()
-
-@app.post("/analyze-signature")
-async def analyze_signature(file: UploadFile = File(...)):
-    contents = await file.read()
-    np_arr = np.frombuffer(contents, np.uint8)
-    image = cv2.imdecode(np_arr, cv2.IMREAD_GRAYSCALE)
-
-    processed = preprocess_image(image)
-    skeleton = skeletonize_image(processed)
-
-    structural = extract_structural_features(skeleton)
-    statistical = extract_statistical_features(processed)
-    texture = extract_texture_features(processed)
-    dynamic = extract_dynamic_features(skeleton)
-    modern = extract_modern_descriptors(processed)
-
-    features = {
-        "structural": structural,
-        "statistical": statistical,
-        "texture": texture,
-        "dynamic": dynamic,
-        "modern_descriptors": modern
-    }
-
-    return JSONResponse(content=features)
 
 def compare_orb(descriptors1, descriptors2):
     if descriptors1 is None or descriptors2 is None:
@@ -76,30 +42,12 @@ def clean_signature(image_np):
     return cleaned
 
 def crop_signature_fixed(image_np):
-    """
-    Crop customer signature using fixed bounding box coordinates.
-    """
     x_start = 1097
     y_start = 729
-    x_end = 1401  # x_start + 304
-    y_end = 1295  # y_start + 566
-
+    x_end = 1401
+    y_end = 1295
     cropped_image = image_np[y_start:y_end, x_start:x_end]
     return cropped_image
-
-@app.post("/debug-cleaned-image")
-async def debug_cleaned_image(file: UploadFile = File(...)):
-    contents = await file.read()
-    image_np = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_GRAYSCALE)
-    
-    cleaned = clean_signature(image_np)
-    pil_image = Image.fromarray(cleaned)
-    buf = BytesIO()
-    pil_image.save(buf, format='PNG')
-    buf.seek(0)
-    
-    return StreamingResponse(buf, media_type="image/png")
-
 
 @app.post("/compare-signatures")
 async def compare_signatures(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
@@ -110,60 +58,7 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
     img2 = cv2.imdecode(np.frombuffer(contents2, np.uint8), cv2.IMREAD_GRAYSCALE)
 
     cropped_img1 = crop_signature_fixed(img1)
-	cleaned_img1 = clean_signature(cropped_img1)
-	cleaned_img2 = clean_signature(img2)  # No crop for database_signature
-
-    processed1 = preprocess_image(cleaned_img1)
-    processed2 = preprocess_image(cleaned_img2)
-
-    features1 = extract_modern_descriptors(processed1)
-    features2 = extract_modern_descriptors(processed2)
-
-    orb_score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
-    hu_score = compare_hu_moments(cleaned_img1, cleaned_img2)
-    ssim_score = compare_ssim_score(cleaned_img1, cleaned_img2)
-
-    combined_score = (orb_score * 0.5) + (hu_score * 0.3) + (ssim_score * 0.2)
-
-    analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
-                       f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
-                       f"ORB score: {orb_score}; Hu Moments score: {hu_score}; SSIM score: {ssim_score}. " \
-                       f"Combined similarity score: {combined_score}."
-
-    if combined_score >= 0.75:
-        result = "definite match"
-        description = "The signatures are strongly matched and highly likely from the same individual. " + analysis_summary
-    elif combined_score >= 0.6:
-        result = "very strong match"
-        description = "The signatures are very similar with high confidence. " + analysis_summary
-    elif combined_score >= 0.45:
-        result = "strong match"
-        description = "The signatures are matched but not conclusively. " + analysis_summary
-    elif combined_score >= 0.3:
-        result = "possible match"
-        description = "The signatures show partial similarity; further manual review is recommended. " + analysis_summary
-    elif combined_score >= 0.15:
-        result = "unlikely match"
-        description = "The signatures show weak similarity and likely do not belong to the same person. " + analysis_summary
-    else:
-        result = "no match"
-        description = "The signatures do not match and are almost certainly from different individuals. " + analysis_summary
-
-    return {
-        "score": round(combined_score, 4),
-        "result": result,
-        "description": description
-    }
-
-@app.post("/compare-signatures-no-crop")
-async def compare_signatures_no_crop(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
-    contents1 = await customer_signature.read()
-    contents2 = await database_signature.read()
-
-    img1 = cv2.imdecode(np.frombuffer(contents1, np.uint8), cv2.IMREAD_GRAYSCALE)
-    img2 = cv2.imdecode(np.frombuffer(contents2, np.uint8), cv2.IMREAD_GRAYSCALE)
-
-    cleaned_img1 = clean_signature(img1)
+    cleaned_img1 = clean_signature(cropped_img1)
     cleaned_img2 = clean_signature(img2)
 
     processed1 = preprocess_image(cleaned_img1)
