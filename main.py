@@ -77,10 +77,10 @@ def clean_signature(image_np):
 
 def crop_signature_fixed(image_np):
     # Refined cropping coordinates based on your new guidance:
-    x_start = 550    # Tightened left side
-    y_start = 1350   # Raised top side
-    x_end = 2450     # Keep right side as-is
-    y_end = 1800     # Lifted bottom side slightly
+    x_start = 1097    # Tightened left side
+    y_start = 729   # Raised top side
+    x_end = 304     # Keep right side as-is
+    y_end = 566     # Lifted bottom side slightly
 
     # Clamp coordinates within image bounds
     x_start = max(0, x_start)
