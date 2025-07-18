@@ -34,10 +34,10 @@ def enhance_image(image_np):
     return image_np
 
 def crop_signature_fixed(image_np):
-    x_start = 1097
-    y_start = 729
-    x_end = 1401
-    y_end = 1295
+    x_start = 300
+    y_start = 650
+    x_end = 300
+    y_end = 125
     cropped_image = image_np[y_start:y_end, x_start:x_end]
     return cropped_image
 
@@ -94,6 +94,17 @@ async def debug_cleaned_image(file: UploadFile = File(...)):
     cleaned = clean_signature(cropped)
     enhanced = enhance_image(cleaned)
     pil_image = Image.fromarray(enhanced)
+    buf = BytesIO()
+    pil_image.save(buf, format='PNG')
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/png")
+
+@app.post("/debug-database-signature")
+async def debug_database_signature(file: UploadFile = File(...)):
+    contents = await file.read()
+    image_np = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_GRAYSCALE)
+    cleaned = clean_signature(image_np)
+    pil_image = Image.fromarray(cleaned)
     buf = BytesIO()
     pil_image.save(buf, format='PNG')
     buf.seek(0)
