@@ -17,18 +17,17 @@ from features import (
 app = FastAPI()
 
 def clean_signature(image_np):
-    gray = cv2.GaussianBlur(image_np, (5, 5), 0)
+    gray = cv2.GaussianBlur(image_np, (3, 3), 0)
     adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                     cv2.THRESH_BINARY, 35, 10)
+                                     cv2.THRESH_BINARY, 15, 8)
     cleaned = cv2.bitwise_not(adaptive)
     return cleaned
 
 def enhance_image(image_np):
-    upscale_factor = 2
-    image_np = cv2.resize(image_np, None, fx=upscale_factor, fy=upscale_factor, interpolation=cv2.INTER_CUBIC)
-    image_np = cv2.fastNlMeansDenoising(image_np, None, h=30)
+    upscale_factor = 1.5
+    image_np = cv2.resize(image_np, None, fx=upscale_factor, fy=upscale_factor, interpolation=cv2.INTER_LINEAR)
     kernel = np.array([[0, -1, 0],
-                       [-1, 5,-1],
+                       [-1, 5, -1],
                        [0, -1, 0]])
     image_np = cv2.filter2D(image_np, -1, kernel)
     return image_np
@@ -40,12 +39,11 @@ def crop_signature_fixed(image_np):
     crop_height = 150
 
     height, width = image_np.shape[:2]
-
     x_end = min(x_start + crop_width, width)
     y_end = min(y_start + crop_height, height)
 
     if y_start >= y_end or x_start >= x_end:
-        return image_np  # fallback to full image
+        return image_np
 
     cropped_image = image_np[y_start:y_end, x_start:x_end]
     return cropped_image
