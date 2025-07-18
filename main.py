@@ -35,9 +35,9 @@ def enhance_image(image_np):
 
 def crop_signature_fixed(image_np):
     x_start = 300
-    y_start = 550
-    crop_width = 500
-    crop_height = 125
+    y_start = 575
+    crop_width = 700
+    crop_height = 175
 
     height, width = image_np.shape[:2]
 
