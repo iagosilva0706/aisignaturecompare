@@ -28,6 +28,22 @@ def crop_signature_fixed(image_np):
     x, y, w, h = 300,600,900,125
     cropped_image = image_np[y:y + h, x:x + w]
     return cropped_image
+	
+def enhance_image(image_np):
+    # Upscale image (increase resolution)
+    upscale_factor = 2
+    image_np = cv2.resize(image_np, None, fx=upscale_factor, fy=upscale_factor, interpolation=cv2.INTER_CUBIC)
+
+    # Denoise (optional)
+    image_np = cv2.fastNlMeansDenoising(image_np, None, h=30)
+
+    # Sharpen (optional)
+    kernel = np.array([[0, -1, 0],
+                       [-1, 5,-1],
+                       [0, -1, 0]])
+    image_np = cv2.filter2D(image_np, -1, kernel)
+
+    return image_np
 
 def compare_orb(descriptors1, descriptors2):
     if descriptors1 is None or descriptors2 is None:
@@ -90,7 +106,7 @@ async def debug_cleaned_image(file: UploadFile = File(...)):
     buf.seek(0)
     return StreamingResponse(buf, media_type="image/png")
 
-@app.post("/compare-signatures")
+@@app.post("/compare-signatures")
 async def compare_signatures(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
     contents1 = await customer_signature.read()
     contents2 = await database_signature.read()
@@ -100,17 +116,20 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
 
     cropped_img1 = crop_signature_fixed(img1)
     cleaned_img1 = clean_signature(cropped_img1)
-    cleaned_img2 = clean_signature(img2)
+    enhanced_img1 = enhance_image(cleaned_img1)
 
-    processed1 = preprocess_image(cleaned_img1)
-    processed2 = preprocess_image(cleaned_img2)
+    cleaned_img2 = clean_signature(img2)
+    enhanced_img2 = enhance_image(cleaned_img2)
+
+    processed1 = preprocess_image(enhanced_img1)
+    processed2 = preprocess_image(enhanced_img2)
 
     features1 = extract_modern_descriptors(processed1)
     features2 = extract_modern_descriptors(processed2)
 
     orb_score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
-    hu_score = compare_hu_moments(cleaned_img1, cleaned_img2)
-    ssim_score = compare_ssim_score(cleaned_img1, cleaned_img2)
+    hu_score = compare_hu_moments(enhanced_img1, enhanced_img2)
+    ssim_score = compare_ssim_score(enhanced_img1, enhanced_img2)
 
     combined_score = (orb_score * 0.5) + (hu_score * 0.3) + (ssim_score * 0.2)
 
