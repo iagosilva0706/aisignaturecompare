@@ -36,17 +36,16 @@ def enhance_image(image_np):
 def crop_signature_fixed(image_np):
     x_start = 300
     y_start = 650
-    x_end = 300
-    y_end = 125
+    crop_width = 300
+    crop_height = 125
 
     height, width = image_np.shape[:2]
-    x_start = max(0, min(x_start, width - 1))
-    x_end = max(0, min(x_end, width))
-    y_start = max(0, min(y_start, height - 1))
-    y_end = max(0, min(y_end, height))
+
+    x_end = min(x_start + crop_width, width)
+    y_end = min(y_start + crop_height, height)
 
     if y_start >= y_end or x_start >= x_end:
-        return image_np  # Fallback to full image to avoid empty crop
+        return image_np  # fallback to full image
 
     cropped_image = image_np[y_start:y_end, x_start:x_end]
     return cropped_image
