@@ -23,27 +23,23 @@ def clean_signature(image_np):
     cleaned = cv2.bitwise_not(adaptive)
     return cleaned
 
-def crop_signature_fixed(image_np):
-    # Coordinates from your marked box (x, y, w, h)
-    x, y, w, h = 300,600,900,125
-    cropped_image = image_np[y:y + h, x:x + w]
-    return cropped_image
-	
 def enhance_image(image_np):
-    # Upscale image (increase resolution)
     upscale_factor = 2
     image_np = cv2.resize(image_np, None, fx=upscale_factor, fy=upscale_factor, interpolation=cv2.INTER_CUBIC)
-
-    # Denoise (optional)
     image_np = cv2.fastNlMeansDenoising(image_np, None, h=30)
-
-    # Sharpen (optional)
     kernel = np.array([[0, -1, 0],
                        [-1, 5,-1],
                        [0, -1, 0]])
     image_np = cv2.filter2D(image_np, -1, kernel)
-
     return image_np
+
+def crop_signature_fixed(image_np):
+    x_start = 1097
+    y_start = 729
+    x_end = 1401
+    y_end = 1295
+    cropped_image = image_np[y_start:y_end, x_start:x_end]
+    return cropped_image
 
 def compare_orb(descriptors1, descriptors2):
     if descriptors1 is None or descriptors2 is None:
@@ -74,16 +70,13 @@ async def analyze_signature(file: UploadFile = File(...)):
     contents = await file.read()
     np_arr = np.frombuffer(contents, np.uint8)
     image = cv2.imdecode(np_arr, cv2.IMREAD_GRAYSCALE)
-
     processed = preprocess_image(image)
     skeleton = skeletonize_image(processed)
-
     structural = extract_structural_features(skeleton)
     statistical = extract_statistical_features(processed)
     texture = extract_texture_features(processed)
     dynamic = extract_dynamic_features(skeleton)
     modern = extract_modern_descriptors(processed)
-
     features = {
         "structural": structural,
         "statistical": statistical,
@@ -91,7 +84,6 @@ async def analyze_signature(file: UploadFile = File(...)):
         "dynamic": dynamic,
         "modern_descriptors": modern
     }
-
     return JSONResponse(content=features)
 
 @app.post("/debug-cleaned-image")
@@ -100,44 +92,36 @@ async def debug_cleaned_image(file: UploadFile = File(...)):
     image_np = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_GRAYSCALE)
     cropped = crop_signature_fixed(image_np)
     cleaned = clean_signature(cropped)
-    pil_image = Image.fromarray(cleaned)
+    enhanced = enhance_image(cleaned)
+    pil_image = Image.fromarray(enhanced)
     buf = BytesIO()
     pil_image.save(buf, format='PNG')
     buf.seek(0)
     return StreamingResponse(buf, media_type="image/png")
 
-@@app.post("/compare-signatures")
+@app.post("/compare-signatures")
 async def compare_signatures(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
     contents1 = await customer_signature.read()
     contents2 = await database_signature.read()
-
     img1 = cv2.imdecode(np.frombuffer(contents1, np.uint8), cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imdecode(np.frombuffer(contents2, np.uint8), cv2.IMREAD_GRAYSCALE)
-
     cropped_img1 = crop_signature_fixed(img1)
     cleaned_img1 = clean_signature(cropped_img1)
     enhanced_img1 = enhance_image(cleaned_img1)
-
     cleaned_img2 = clean_signature(img2)
     enhanced_img2 = enhance_image(cleaned_img2)
-
     processed1 = preprocess_image(enhanced_img1)
     processed2 = preprocess_image(enhanced_img2)
-
     features1 = extract_modern_descriptors(processed1)
     features2 = extract_modern_descriptors(processed2)
-
     orb_score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
     hu_score = compare_hu_moments(enhanced_img1, enhanced_img2)
     ssim_score = compare_ssim_score(enhanced_img1, enhanced_img2)
-
     combined_score = (orb_score * 0.5) + (hu_score * 0.3) + (ssim_score * 0.2)
-
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
                        f"ORB score: {orb_score}; Hu Moments score: {hu_score}; SSIM score: {ssim_score}. " \
                        f"Combined similarity score: {combined_score}."
-
     if combined_score >= 0.75:
         result = "definite match"
     elif combined_score >= 0.6:
@@ -150,9 +134,7 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
         result = "unlikely match"
     else:
         result = "no match"
-
     description = analysis_summary
-
     return {
         "score": round(combined_score, 4),
         "result": result,
@@ -163,30 +145,24 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
 async def compare_signatures_no_crop(customer_signature: UploadFile = File(...), database_signature: UploadFile = File(...)):
     contents1 = await customer_signature.read()
     contents2 = await database_signature.read()
-
     img1 = cv2.imdecode(np.frombuffer(contents1, np.uint8), cv2.IMREAD_GRAYSCALE)
     img2 = cv2.imdecode(np.frombuffer(contents2, np.uint8), cv2.IMREAD_GRAYSCALE)
-
     cleaned_img1 = clean_signature(img1)
+    enhanced_img1 = enhance_image(cleaned_img1)
     cleaned_img2 = clean_signature(img2)
-
-    processed1 = preprocess_image(cleaned_img1)
-    processed2 = preprocess_image(cleaned_img2)
-
+    enhanced_img2 = enhance_image(cleaned_img2)
+    processed1 = preprocess_image(enhanced_img1)
+    processed2 = preprocess_image(enhanced_img2)
     features1 = extract_modern_descriptors(processed1)
     features2 = extract_modern_descriptors(processed2)
-
     orb_score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
-    hu_score = compare_hu_moments(cleaned_img1, cleaned_img2)
-    ssim_score = compare_ssim_score(cleaned_img1, cleaned_img2)
-
+    hu_score = compare_hu_moments(enhanced_img1, enhanced_img2)
+    ssim_score = compare_ssim_score(enhanced_img1, enhanced_img2)
     combined_score = (orb_score * 0.5) + (hu_score * 0.3) + (ssim_score * 0.2)
-
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
                        f"ORB score: {orb_score}; Hu Moments score: {hu_score}; SSIM score: {ssim_score}. " \
                        f"Combined similarity score: {combined_score}."
-
     if combined_score >= 0.75:
         result = "definite match"
     elif combined_score >= 0.6:
@@ -199,9 +175,7 @@ async def compare_signatures_no_crop(customer_signature: UploadFile = File(...),
         result = "unlikely match"
     else:
         result = "no match"
-
     description = analysis_summary
-
     return {
         "score": round(combined_score, 4),
         "result": result,
