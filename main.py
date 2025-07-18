@@ -38,6 +38,16 @@ def crop_signature_fixed(image_np):
     y_start = 650
     x_end = 300
     y_end = 125
+
+    height, width = image_np.shape[:2]
+    x_start = max(0, min(x_start, width - 1))
+    x_end = max(0, min(x_end, width))
+    y_start = max(0, min(y_start, height - 1))
+    y_end = max(0, min(y_end, height))
+
+    if y_start >= y_end or x_start >= x_end:
+        return image_np  # Fallback to full image to avoid empty crop
+
     cropped_image = image_np[y_start:y_end, x_start:x_end]
     return cropped_image
 
