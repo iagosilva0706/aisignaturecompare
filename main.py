@@ -135,7 +135,7 @@ async def compare_signatures(customer_signature: UploadFile = File(...), databas
     orb_score = compare_orb(features1.get('orb_descriptors_sample'), features2.get('orb_descriptors_sample'))
     hu_score = compare_hu_moments(enhanced_img1, enhanced_img2)
     ssim_score = compare_ssim_score(enhanced_img1, enhanced_img2)
-    combined_score = (orb_score * 0.7 + (hu_score * 0.1 + (ssim_score * 0.2)
+    combined_score = (orb_score * 0.7) + (hu_score * 0.1) + (ssim_score * 0.2)
     analysis_summary = f"Customer signature keypoints: {features1.get('num_orb_keypoints', 0)}; " \
                        f"Database signature keypoints: {features2.get('num_orb_keypoints', 0)}. " \
                        f"ORB score: {orb_score}; Hu Moments score: {hu_score}; SSIM score: {ssim_score}. " \
