@@ -51,8 +51,18 @@ def crop_signature_fixed(image_np):
 def compare_orb(descriptors1, descriptors2):
     if descriptors1 is None or descriptors2 is None:
         return 0.0
+
+    if len(descriptors1) == 0 or len(descriptors2) == 0:
+        return 0.0
+
+    descriptors1 = np.array(descriptors1, dtype=np.uint8)
+    descriptors2 = np.array(descriptors2, dtype=np.uint8)
+
+    if descriptors1.ndim != 2 or descriptors2.ndim != 2 or descriptors1.shape[1] != descriptors2.shape[1]:
+        return 0.0
+
     bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    matches = bf.match(np.array(descriptors1, dtype=np.uint8), np.array(descriptors2, dtype=np.uint8))
+    matches = bf.match(descriptors1, descriptors2)
     similarity = len(matches) / max(len(descriptors1), len(descriptors2))
     return round(similarity, 4)
 
